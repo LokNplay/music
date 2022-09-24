@@ -4,17 +4,33 @@ import android.app.Dialog
 import android.content.DialogInterface.BUTTON_POSITIVE
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatDialogFragment
+import androidx.core.os.bundleOf
 import androidx.core.widget.doOnTextChanged
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.zionhuang.music.R
+import com.zionhuang.music.constants.MediaConstants.EXTRA_BLOCK
 import com.zionhuang.music.databinding.DialogSingleTextInputBinding
 import com.zionhuang.music.db.entities.PlaylistEntity
+import com.zionhuang.music.db.entities.PlaylistEntity.Companion.generatePlaylistId
+import com.zionhuang.music.extensions.exceptionHandler
 import com.zionhuang.music.repos.SongRepository
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
-class CreatePlaylistDialog : AppCompatDialogFragment() {
+class CreatePlaylistDialog() : AppCompatDialogFragment() {
     private lateinit var binding: DialogSingleTextInputBinding
+    private var listener: PlaylistListener? = null
+
+    constructor(listener: PlaylistListener?) : this() {
+        arguments = bundleOf(EXTRA_BLOCK to listener)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        listener = arguments?.getSerializable(EXTRA_BLOCK) as? PlaylistListener
+    }
 
     private fun setupUI() {
         binding.textInput.apply {
@@ -42,11 +58,17 @@ class CreatePlaylistDialog : AppCompatDialogFragment() {
             }
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     private fun onOK() {
         if (binding.textInput.editText?.text.isNullOrEmpty()) return
         val name = binding.textInput.editText?.text.toString()
-        GlobalScope.launch {
-            SongRepository.addPlaylist(PlaylistEntity(name = name))
+        val playlist = PlaylistEntity(
+            id = generatePlaylistId(),
+            name = name
+        )
+        GlobalScope.launch(requireContext().exceptionHandler) {
+            SongRepository.insertPlaylist(playlist)
+            listener?.invoke(playlist)
         }
         dismiss()
     }
